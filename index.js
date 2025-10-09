@@ -1,64 +1,74 @@
-// Requerimos dotenv para poder usar nuestras variables de entorno
 require('dotenv').config();
-
 const express = require('express');
-// NUEVO: Requerimos el cliente de MongoDB
-const { MongoClient } = require('mongodb');
+const { MongoClient, ObjectId } = require('mongodb'); // Importamos ObjectId
 
 const app = express();
 const PORT = 3000;
+app.use(express.json());
 
-// Obtenemos la cadena de conexión desde nuestro archivo .env
 const client = new MongoClient(process.env.DATABASE_URL);
 
-// Variable para saber si estamos conectados
-let isDbConnected = false;
-
-// Función para conectar a la base de datos
 async function connectDB() {
   try {
-    // Conectamos el cliente al servidor
     await client.connect();
-    isDbConnected = true;
     console.log('¡Conectado exitosamente a la base de datos! 💾');
   } catch (error) {
     console.error('Falló la conexión a la base de datos', error);
-    // Si la conexión falla, detenemos la aplicación
     process.exit(1);
   }
 }
-
-// Llamamos a la función para conectar
 connectDB();
 
-app.get('/', (req, res) => {
-  res.send('¡Mi motor Express está funcionando!');
+const collection = client.db('autoflowDB').collection('jobs');
+
+// CREATE - Crear un nuevo trabajo
+app.post('/api/jobs', async (req, res) => {
+  try {
+    const newJob = req.body;
+    const result = await collection.insertOne(newJob);
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
 });
 
-// Endpoint modificado con diagnósticos
+// READ - Obtener todos los trabajos
 app.get('/api/jobs', async (req, res) => {
-  // SENSOR 1: Verificamos si la ruta se está ejecutando
-  console.log('Ruta /api/jobs alcanzada.');
-
-  if (!isDbConnected) {
-    console.log('Error: La base de datos no está conectada.');
-    return res.status(500).json({ error: 'Servidor no conectado a la base de datos' });
-  }
-
   try {
-    const collection = client.db('autoflowDB').collection('jobs');
     const jobs = await collection.find({}).toArray();
-    
-    // SENSOR 2: Veremos qué es lo que la base de datos nos devuelve
-    console.log('Datos obtenidos de la base de datos:', jobs);
-
     res.json(jobs);
   } catch (error) {
-    // SENSOR 3: Si hay un error en la consulta, lo veremos aquí
-    console.error('Error al obtener los trabajos desde la base de datos', error);
-    res.status(500).json({ error: 'Ocurrió un error en el servidor al consultar los datos' });
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
   }
 });
+
+// --- NUEVO: UPDATE - Actualizar un trabajo por su ID ---
+app.put('/api/jobs/:id', async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const updatedJob = req.body;
+    const result = await collection.updateOne(
+      { _id: new ObjectId(jobId) }, // Filtro para encontrar el documento
+      { $set: updatedJob }         // Los nuevos datos
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+// --------------------------------------------------
+
+// --- NUEVO: DELETE - Borrar un trabajo por su ID ---
+app.delete('/api/jobs/:id', async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const result = await collection.deleteOne({ _id: new ObjectId(jobId) });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+// -------------------------------------------------
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
