@@ -18,9 +18,11 @@
   },
   "homepage": "https://github.com/Xavraha/autoflow-app#readme",
   "dependencies": {
+    "cloudinary": "^2.7.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "mongodb": "^6.20.0"
+    "mongodb": "^6.20.0",
+    "multer": "^2.0.2"
   }
 }
