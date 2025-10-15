@@ -11,7 +11,8 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+const corsOptions = {origin: 'https://autoflow-frontend-wj3z.vercel.app' 
+};
 app.use(express.json());
 
 // --- Configuración de Cloudinary ---
