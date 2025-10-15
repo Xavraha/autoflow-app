@@ -11,8 +11,15 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const corsOptions = {origin: 'https://autoflow-frontend-wj3z.vercel.app' 
+const corsOptions = {
+  // Esta es la dirección de tu frontend. Solo ella podrá hacerle peticiones a este backend.
+  origin: 'https://autoflow-frontend-wj3z.vercel.app' 
 };
+
+// Le decimos a la app que USE estas opciones específicas de CORS
+app.use(cors(corsOptions));
+
+// Esta línea se queda igual, justo después
 app.use(express.json());
 
 // --- Configuración de Cloudinary ---
@@ -331,5 +338,5 @@ app.patch('/api/jobs/:id/status', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`Servidor corriendo en ${PORT}`);
 });
