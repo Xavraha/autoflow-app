@@ -9,7 +9,7 @@ const multer = require('multer');
 const axios = require('axios');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -289,6 +289,43 @@ app.get('/api/vehicle-info/:vin', async (req, res) => {
   } catch (error) {
     console.error('Error al contactar la API de NHTSA:', error.message);
     res.status(404).json({ error: 'VIN no encontrado o inválido.' });
+  }
+});
+
+// --- NUEVO: OBTENER UN SOLO TRABAJO POR SU ID ---
+app.get('/api/jobs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID de trabajo inválido' });
+    }
+    const collection = client.db('autoflowDB').collection('jobs');
+    const job = await collection.findOne({ _id: new ObjectId(id) });
+    if (!job) {
+      return res.status(404).json({ error: 'Trabajo no encontrado' });
+    }
+    res.json(job);
+  } catch (error) {
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// --- NUEVO: ACTUALIZAR EL ESTADO DE UN TRABAJO ---
+app.patch('/api/jobs/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body; // Recibimos el nuevo estado desde el frontend
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID de trabajo inválido' });
+    }
+    const collection = client.db('autoflowDB').collection('jobs');
+    const result = await collection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: status } }
+    );
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
   }
 });
 
