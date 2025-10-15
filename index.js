@@ -6,6 +6,7 @@ const { MongoClient, ObjectId } = require('mongodb');
 const cors = require('cors');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
+const axios = require('axios');
 
 const app = express();
 const PORT = 3000;
@@ -40,12 +41,40 @@ connectDB();
 // Aquí va tu código para GET, POST, PUT, DELETE de /api/jobs
 // ...
 
-// CREATE
+// REEMPLAZA TU ANTIGUO 'CREATE JOB' CON ESTE
 app.post('/api/jobs', async (req, res) => {
   try {
+    console.log('Datos recibidos en el backend:', req.body);
+    
     const collection = client.db('autoflowDB').collection('jobs');
-    const newJob = req.body;
+    const { customerId, vehicleInfo, taskInfo } = req.body;
+
+    // Preparamos el documento base del nuevo trabajo
+    const newJob = {
+      customerId: new ObjectId(customerId),
+      vehicleInfo: vehicleInfo,
+      status: 'pending_diagnosis',
+      tasks: [], // Por defecto, la lista de tareas empieza vacía
+      createdAt: new Date()
+    };
+
+    // LÓGICA MEJORADA: Verificamos si existe taskInfo y si tiene un título
+    if (taskInfo && taskInfo.title) {
+      console.log('Condición cumplida: Se creará la tarea inicial.');
+      // Si la condición se cumple, añadimos la tarea al array 'tasks'
+      newJob.tasks.push({
+        _id: new ObjectId(),
+        title: taskInfo.title,
+        technician: taskInfo.technician,
+        description: taskInfo.description,
+        steps: []
+      });
+    } else {
+      console.log('Condición NO cumplida: La lista de tareas queda vacía.');
+    }
+
     const result = await collection.insertOne(newJob);
+    console.log('Documento insertado en la base de datos.');
     res.status(201).json(result);
   } catch (error) {
     console.error('Error en POST /api/jobs:', error);
@@ -128,8 +157,8 @@ app.post('/api/jobs/:jobId/tasks', async (req, res) => {
 // --- NUEVO: Añadir un PASO a una TAREA ---
 app.post('/api/jobs/:jobId/tasks/:taskId/steps', async (req, res) => {
   try {
-    const { jobId, taskId } = req.params;
-    const collection = client.db('autoflowDB').collection('jobs');
+        const collection = client.db('autoflowDB').collection('jobs');
+        const { jobId, taskId } = req.params;
     
     const newStep = {
       _id: new ObjectId(), // Generamos un ID único para el paso
@@ -202,6 +231,64 @@ app.patch('/api/jobs/:jobId/tasks/:taskId/steps/:stepId', async (req, res) => {
   } catch (error) {
     console.error('Error al actualizar el paso:', error);
     res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// --- NUEVO: ENDPOINTS PARA CLIENTES ---
+
+// CREATE CUSTOMER
+app.post('/api/customers', async (req, res) => {
+  try {
+    const collection = client.db('autoflowDB').collection('customers');
+    const newCustomer = req.body; // ej: { name: "Jane Smith", phone: "555-8765" }
+    const result = await collection.insertOne(newCustomer);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error en POST /api/customers:', error);
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// READ ALL CUSTOMERS
+app.get('/api/customers', async (req, res) => {
+  try {
+    const collection = client.db('autoflowDB').collection('customers');
+    const customers = await collection.find({}).toArray();
+    res.json(customers);
+  } catch (error) {
+    console.error('Error en GET /api/customers:', error);
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// --- NUEVO: ENDPOINT PARA DECODIFICAR VIN ---
+app.get('/api/vehicle-info/:vin', async (req, res) => {
+  const { vin } = req.params;
+  const nhtsaApiUrl = `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`;
+
+  try {
+    console.log(`Recibida petición para VIN: ${vin}`);
+    const response = await axios.get(nhtsaApiUrl);
+    const data = response.data.Results[0];
+
+    // La API de NHTSA devuelve muchos datos. Filtramos solo los que nos interesan.
+    const vehicleInfo = {
+      make: data.Make,
+      model: data.Model,
+      year: data.ModelYear,
+      manufacturer: data.Manufacturer,
+      vehicleType: data.VehicleType,
+      engineCylinders: data.EngineCylinders,
+      fuelType: data.FuelTypePrimary,
+      transmission: data.TransmissionStyle
+    };
+
+    console.log('Información decodificada:', vehicleInfo);
+    res.json(vehicleInfo);
+
+  } catch (error) {
+    console.error('Error al contactar la API de NHTSA:', error.message);
+    res.status(404).json({ error: 'VIN no encontrado o inválido.' });
   }
 });
 
