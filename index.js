@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 const corsOptions = {
   // Esta es la dirección de tu frontend. Solo ella podrá hacerle peticiones a este backend.
-  origin: 'https://autoflow-frontend-wj3z.vercel.app' 
+  origin: 'https://autoflow-frontend-wj3z.vercel.app'
 };
 
 // Le decimos a la app que USE estas opciones específicas de CORS
@@ -45,15 +45,13 @@ async function connectDB() {
 }
 connectDB();
 
-// --- TUS ENDPOINTS CRUD EXISTENTES ---
-// Aquí va tu código para GET, POST, PUT, DELETE de /api/jobs
-// ...
+// ===== ENDPOINTS PARA JOBS =====
 
-// REEMPLAZA TU ANTIGUO 'CREATE JOB' CON ESTE
+// CREATE JOB
 app.post('/api/jobs', async (req, res) => {
   try {
     console.log('Datos recibidos en el backend:', req.body);
-    
+
     const collection = client.db('autoflowDB').collection('jobs');
     const { customerId, vehicleInfo, taskInfo } = req.body;
 
@@ -90,7 +88,7 @@ app.post('/api/jobs', async (req, res) => {
   }
 });
 
-// READ
+// READ ALL JOBS
 app.get('/api/jobs', async (req, res) => {
   try {
     const collection = client.db('autoflowDB').collection('jobs');
@@ -102,13 +100,32 @@ app.get('/api/jobs', async (req, res) => {
   }
 });
 
-// UPDATE
+// GET SINGLE JOB BY ID
+app.get('/api/jobs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID de trabajo inválido' });
+    }
+    const collection = client.db('autoflowDB').collection('jobs');
+    const job = await collection.findOne({ _id: new ObjectId(id) });
+    if (!job) {
+      return res.status(404).json({ error: 'Trabajo no encontrado' });
+    }
+    res.json(job);
+  } catch (error) {
+    console.error('Error en GET /api/jobs/:id:', error);
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// UPDATE JOB
 app.put('/api/jobs/:id', async (req, res) => {
   try {
     const collection = client.db('autoflowDB').collection('jobs');
     const jobId = req.params.id;
     if (!ObjectId.isValid(jobId)) {
-        return res.status(400).json({ error: 'ID de trabajo inválido' });
+      return res.status(400).json({ error: 'ID de trabajo inválido' });
     }
     const updatedJob = req.body;
     const result = await collection.updateOne(
@@ -122,13 +139,33 @@ app.put('/api/jobs/:id', async (req, res) => {
   }
 });
 
-// DELETE
+// UPDATE JOB STATUS
+app.patch('/api/jobs/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID de trabajo inválido' });
+    }
+    const collection = client.db('autoflowDB').collection('jobs');
+    const result = await collection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: status } }
+    );
+    res.json(result);
+  } catch (error) {
+    console.error('Error en PATCH /api/jobs/:id/status:', error);
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// DELETE JOB
 app.delete('/api/jobs/:id', async (req, res) => {
   try {
     const collection = client.db('autoflowDB').collection('jobs');
     const jobId = req.params.id;
     if (!ObjectId.isValid(jobId)) {
-        return res.status(400).json({ error: 'ID de trabajo inválido' });
+      return res.status(400).json({ error: 'ID de trabajo inválido' });
     }
     const result = await collection.deleteOne({ _id: new ObjectId(jobId) });
     res.json(result);
@@ -138,38 +175,42 @@ app.delete('/api/jobs/:id', async (req, res) => {
   }
 });
 
-// --- NUEVO: Añadir una TAREA a un TRABAJO ---
+// ===== ENDPOINTS PARA TASKS =====
+
+// ADD TASK TO JOB
 app.post('/api/jobs/:jobId/tasks', async (req, res) => {
   try {
     const { jobId } = req.params;
     const collection = client.db('autoflowDB').collection('jobs');
-    
+
     const newTask = {
-      _id: new ObjectId(), // Generamos un ID único para la tarea
+      _id: new ObjectId(),
       title: req.body.title,
       technician: req.body.technician,
-      steps: [] // Empezamos con una lista de pasos vacía
+      description: req.body.description || '',
+      steps: []
     };
 
     const result = await collection.updateOne(
       { _id: new ObjectId(jobId) },
-      { $push: { tasks: newTask } } // $push añade el nuevo objeto al array 'tasks'
+      { $push: { tasks: newTask } }
     );
 
     res.status(201).json(result);
   } catch (error) {
+    console.error('Error en POST /api/jobs/:jobId/tasks:', error);
     res.status(500).json({ error: 'Ocurrió un error en el servidor' });
   }
 });
 
-// --- NUEVO: Añadir un PASO a una TAREA ---
+// ADD STEP TO TASK
 app.post('/api/jobs/:jobId/tasks/:taskId/steps', async (req, res) => {
   try {
-        const collection = client.db('autoflowDB').collection('jobs');
-        const { jobId, taskId } = req.params;
-    
+    const collection = client.db('autoflowDB').collection('jobs');
+    const { jobId, taskId } = req.params;
+
     const newStep = {
-      _id: new ObjectId(), // Generamos un ID único para el paso
+      _id: new ObjectId(),
       description: req.body.description,
       photo_before: req.body.photo_before || null,
       photo_after: req.body.photo_after || null,
@@ -178,54 +219,31 @@ app.post('/api/jobs/:jobId/tasks/:taskId/steps', async (req, res) => {
 
     const result = await collection.updateOne(
       { _id: new ObjectId(jobId), "tasks._id": new ObjectId(taskId) },
-      { $push: { "tasks.$.steps": newStep } } // $push anidado para añadir el paso
+      { $push: { "tasks.$.steps": newStep } }
     );
 
     res.status(201).json(result);
   } catch (error) {
+    console.error('Error en POST /api/jobs/:jobId/tasks/:taskId/steps:', error);
     res.status(500).json({ error: 'Ocurrió un error en el servidor' });
   }
 });
 
-
-// --- NUEVO: Subir un ARCHIVO (foto o video) ---
-app.post('/api/upload', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No se subió ningún archivo.' });
-    }
-
-    // Usamos un stream para subir el archivo desde el buffer de memoria a Cloudinary
-    cloudinary.uploader.upload_stream({ resource_type: 'auto' }, (error, result) => {
-      if (error || !result) {
-        console.error('Error en Cloudinary:', error);
-        return res.status(500).json({ error: 'Error al subir a Cloudinary' });
-      }
-      
-      // Devolvemos la URL segura del archivo subido
-      res.status(201).json({ url: result.secure_url });
-    }).end(req.file.buffer);
-
-  } catch (error) {
-    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
-  }
-});
-
-// --- NUEVO: Actualizar un PASO específico (ej. para añadir una URL de imagen) ---
+// UPDATE STEP
 app.patch('/api/jobs/:jobId/tasks/:taskId/steps/:stepId', async (req, res) => {
   try {
     const { jobId, taskId, stepId } = req.params;
-    const { photo_before } = req.body; // Recibimos la URL de la imagen
+    const { photo_before } = req.body;
 
     const collection = client.db('autoflowDB').collection('jobs');
-    
+
     const result = await collection.updateOne(
-      { 
-        _id: new ObjectId(jobId), 
-        "tasks._id": new ObjectId(taskId) 
+      {
+        _id: new ObjectId(jobId),
+        "tasks._id": new ObjectId(taskId)
       },
-      { 
-        $set: { "tasks.$[task].steps.$[step].photo_before": photo_before } 
+      {
+        $set: { "tasks.$[task].steps.$[step].photo_before": photo_before }
       },
       {
         arrayFilters: [
@@ -242,13 +260,13 @@ app.patch('/api/jobs/:jobId/tasks/:taskId/steps/:stepId', async (req, res) => {
   }
 });
 
-// --- NUEVO: ENDPOINTS PARA CLIENTES ---
+// ===== ENDPOINTS PARA CUSTOMERS =====
 
 // CREATE CUSTOMER
 app.post('/api/customers', async (req, res) => {
   try {
     const collection = client.db('autoflowDB').collection('customers');
-    const newCustomer = req.body; // ej: { name: "Jane Smith", phone: "555-8765" }
+    const newCustomer = req.body;
     const result = await collection.insertOne(newCustomer);
     res.status(201).json(result);
   } catch (error) {
@@ -269,7 +287,8 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
-// --- NUEVO: ENDPOINT PARA DECODIFICAR VIN ---
+// ===== ENDPOINT PARA VIN DECODER =====
+
 app.get('/api/vehicle-info/:vin', async (req, res) => {
   const { vin } = req.params;
   const nhtsaApiUrl = `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`;
@@ -279,7 +298,6 @@ app.get('/api/vehicle-info/:vin', async (req, res) => {
     const response = await axios.get(nhtsaApiUrl);
     const data = response.data.Results[0];
 
-    // La API de NHTSA devuelve muchos datos. Filtramos solo los que nos interesan.
     const vehicleInfo = {
       make: data.Make,
       model: data.Model,
@@ -300,39 +318,92 @@ app.get('/api/vehicle-info/:vin', async (req, res) => {
   }
 });
 
-// --- NUEVO: OBTENER UN SOLO TRABAJO POR SU ID ---
-app.get('/api/jobs/:id', async (req, res) => {
+// ===== ENDPOINT PARA FILE UPLOAD =====
+
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de trabajo inválido' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se subió ningún archivo.' });
     }
-    const collection = client.db('autoflowDB').collection('jobs');
-    const job = await collection.findOne({ _id: new ObjectId(id) });
-    if (!job) {
-      return res.status(404).json({ error: 'Trabajo no encontrado' });
-    }
-    res.json(job);
+
+    cloudinary.uploader.upload_stream({ resource_type: 'auto' }, (error, result) => {
+      if (error || !result) {
+        console.error('Error en Cloudinary:', error);
+        return res.status(500).json({ error: 'Error al subir a Cloudinary' });
+      }
+
+      res.status(201).json({ url: result.secure_url });
+    }).end(req.file.buffer);
+
   } catch (error) {
+    console.error('Error en POST /api/upload:', error);
     res.status(500).json({ error: 'Ocurrió un error en el servidor' });
   }
 });
 
-// --- NUEVO: ACTUALIZAR EL ESTADO DE UN TRABAJO ---
-app.patch('/api/jobs/:id/status', async (req, res) => {
+// ===== ENDPOINTS PARA TECHNICIANS =====
+
+// CREATE TECHNICIAN
+app.post('/api/technicians', async (req, res) => {
+  try {
+    const collection = client.db('autoflowDB').collection('technicians');
+    const newTechnician = {
+      ...req.body,
+      createdAt: new Date(),
+      status: req.body.status || 'available',
+      stats: req.body.stats || { efficiency: 0, speed: 0, tasksCompleted: 0 }
+    };
+    const result = await collection.insertOne(newTechnician);
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Error en POST /api/technicians:', error);
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// READ ALL TECHNICIANS
+app.get('/api/technicians', async (req, res) => {
+  try {
+    const collection = client.db('autoflowDB').collection('technicians');
+    const technicians = await collection.find({}).toArray();
+    res.json(technicians);
+  } catch (error) {
+    console.error('Error en GET /api/technicians:', error);
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// UPDATE TECHNICIAN
+app.put('/api/technicians/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // Recibimos el nuevo estado desde el frontend
     if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID de trabajo inválido' });
+      return res.status(400).json({ error: 'ID inválido' });
     }
-    const collection = client.db('autoflowDB').collection('jobs');
+    const collection = client.db('autoflowDB').collection('technicians');
     const result = await collection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { status: status } }
+      { $set: req.body }
     );
     res.json(result);
   } catch (error) {
+    console.error('Error en PUT /api/technicians/:id:', error);
+    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+  }
+});
+
+// DELETE TECHNICIAN
+app.delete('/api/technicians/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'ID inválido' });
+    }
+    const collection = client.db('autoflowDB').collection('technicians');
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+    res.json(result);
+  } catch (error) {
+    console.error('Error en DELETE /api/technicians/:id:', error);
     res.status(500).json({ error: 'Ocurrió un error en el servidor' });
   }
 });
