@@ -212,6 +212,7 @@ app.post('/api/jobs/:jobId/tasks/:taskId/steps', async (req, res) => {
     const newStep = {
       _id: new ObjectId(),
       description: req.body.description,
+      comment: req.body.comment || '',
       photo_before: req.body.photo_before || null,
       photo_after: req.body.photo_after || null,
       video_url: req.body.video_url || null
