@@ -218,10 +218,25 @@ app.post('/api/jobs/:jobId/tasks/:taskId/steps', async (req, res) => {
       video_url: req.body.video_url || null
     };
 
-    const result = await collection.updateOne(
-      { _id: new ObjectId(jobId), "tasks._id": new ObjectId(taskId) },
+    // Intentar con taskId como string primero, luego como ObjectId
+    let result = await collection.updateOne(
+      { _id: new ObjectId(jobId), "tasks._id": taskId },
       { $push: { "tasks.$.steps": newStep } }
     );
+
+    // Si no encontró nada, intentar con ObjectId
+    if (result.matchedCount === 0 && ObjectId.isValid(taskId)) {
+      result = await collection.updateOne(
+        { _id: new ObjectId(jobId), "tasks._id": new ObjectId(taskId) },
+        { $push: { "tasks.$.steps": newStep } }
+      );
+    }
+
+    console.log('Resultado de crear paso:', result);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Job o Task no encontrado' });
+    }
 
     res.status(201).json(result);
   } catch (error) {
