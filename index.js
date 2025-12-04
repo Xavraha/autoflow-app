@@ -12,14 +12,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const corsOptions = {
-  // Esta es la dirección de tu frontend. Solo ella podrá hacerle peticiones a este backend.
   origin: 'https://autoflow-frontend-wj3z.vercel.app'
 };
 
-// Le decimos a la app que USE estas opciones específicas de CORS
 app.use(cors(corsOptions));
-
-// Esta línea se queda igual, justo después
 app.use(express.json());
 
 // --- Configuración de Cloudinary ---
@@ -29,7 +25,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// --- Configuración de Multer (para guardar archivos temporalmente en memoria) ---
+// --- Configuración de Multer ---
 const upload = multer({ storage: multer.memoryStorage() });
 
 const client = new MongoClient(process.env.DATABASE_URL);
@@ -51,23 +47,19 @@ connectDB();
 app.post('/api/jobs', async (req, res) => {
   try {
     console.log('Datos recibidos en el backend:', req.body);
-
     const collection = client.db('autoflowDB').collection('jobs');
     const { customerId, vehicleInfo, taskInfo } = req.body;
 
-    // Preparamos el documento base del nuevo trabajo
     const newJob = {
       customerId: new ObjectId(customerId),
       vehicleInfo: vehicleInfo,
       status: 'pending_diagnosis',
-      tasks: [], // Por defecto, la lista de tareas empieza vacía
+      tasks: [],
       createdAt: new Date()
     };
 
-    // LÓGICA MEJORADA: Verificamos si existe taskInfo y si tiene un título
     if (taskInfo && taskInfo.title) {
       console.log('Condición cumplida: Se creará la tarea inicial.');
-      // Si la condición se cumple, añadimos la tarea al array 'tasks'
       newJob.tasks.push({
         _id: new ObjectId(),
         title: taskInfo.title,
@@ -218,13 +210,11 @@ app.post('/api/jobs/:jobId/tasks/:taskId/steps', async (req, res) => {
       video_url: req.body.video_url || null
     };
 
-    // Intentar con taskId como string primero, luego como ObjectId
     let result = await collection.updateOne(
       { _id: new ObjectId(jobId), "tasks._id": taskId },
       { $push: { "tasks.$.steps": newStep } }
     );
 
-    // Si no encontró nada, intentar con ObjectId
     if (result.matchedCount === 0 && ObjectId.isValid(taskId)) {
       result = await collection.updateOne(
         { _id: new ObjectId(jobId), "tasks._id": new ObjectId(taskId) },
@@ -373,7 +363,7 @@ app.post('/api/technicians', async (req, res) => {
     res.status(201).json(result);
   } catch (error) {
     console.error('Error en POST /api/technicians:', error);
-    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+    res.status(500).json({ message: error.message || 'Ocurrió un error en el servidor' });
   }
 });
 
@@ -385,7 +375,7 @@ app.get('/api/technicians', async (req, res) => {
     res.json(technicians);
   } catch (error) {
     console.error('Error en GET /api/technicians:', error);
-    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+    res.status(500).json({ message: error.message || 'Ocurrió un error en el servidor' });
   }
 });
 
@@ -394,17 +384,26 @@ app.put('/api/technicians/:id', async (req, res) => {
   try {
     const { id } = req.params;
     if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID inválido' });
+      return res.status(400).json({ message: 'ID inválido' });
     }
     const collection = client.db('autoflowDB').collection('technicians');
+
+    // Exclude _id from the update body to prevent MongoDB errors
+    const { _id, ...updateData } = req.body;
+
     const result = await collection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: req.body }
+      { $set: updateData }
     );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Técnico no encontrado' });
+    }
+
     res.json(result);
   } catch (error) {
     console.error('Error en PUT /api/technicians/:id:', error);
-    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+    res.status(500).json({ message: error.message || 'Ocurrió un error en el servidor' });
   }
 });
 
@@ -413,14 +412,14 @@ app.delete('/api/technicians/:id', async (req, res) => {
   try {
     const { id } = req.params;
     if (!ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'ID inválido' });
+      return res.status(400).json({ message: 'ID inválido' });
     }
     const collection = client.db('autoflowDB').collection('technicians');
     const result = await collection.deleteOne({ _id: new ObjectId(id) });
     res.json(result);
   } catch (error) {
     console.error('Error en DELETE /api/technicians/:id:', error);
-    res.status(500).json({ error: 'Ocurrió un error en el servidor' });
+    res.status(500).json({ message: error.message || 'Ocurrió un error en el servidor' });
   }
 });
 
